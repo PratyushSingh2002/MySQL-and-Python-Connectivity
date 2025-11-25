@@ -1,16 +1,18 @@
-# Student management system with mysql
-# connecting mysql 
 import mysql.connector
 import csv
-connect=mysql.connector.connect(host='localhost',user='root',passwd='123456',charset='utf8')
-cursor= connect.cursor()
-# Create database if not exists
-create_db_query = 'CREATE DATABASE IF NOT EXISTS student_data_manager'
-cursor.execute(create_db_query)
+
+connect = mysql.connector.connect(
+    host='localhost',
+    user='root',
+    password='123456',
+    charset='utf8'
+)
+cursor = connect.cursor()
+
+cursor.execute('CREATE DATABASE IF NOT EXISTS student_data_manager')
 connect.database = 'student_data_manager'
 
-# Create table if not exists
-create_table_query = '''
+cursor.execute('''
 CREATE TABLE IF NOT EXISTS student_datas (
     name VARCHAR(100),
     address VARCHAR(100),
@@ -19,132 +21,142 @@ CREATE TABLE IF NOT EXISTS student_datas (
     mname VARCHAR(100),
     roll_no INT PRIMARY KEY
 )
-'''
-cursor.execute(create_table_query)
+''')
 connect.commit()
-# student adding function
 
-def add_sutdent():
-    name=input("Enter Student Name : - ")
-    address=input("Enter Student's Addresss : - ")
-    phone=input("Enter Student's Phone number : - ")
-    fname=input("Enter Student's Father Name : - ")
-    mname=input("Enter Student's Mothers Name : - ")
-    roll_no=int(input("Enter Student's Roll No. : - "))
-    q1='insert into student_datas values(%s,%s,%s,%s,%s,%s)'
-    data=(name,address,phone,fname,mname,roll_no)
-    cursor.execute(q1,data)
-    connect.commit()
-    print("Data Enteres Succesfully ")
+def add_student():
+    name = input("Enter Student Name: ")
+    address = input("Enter Student's Address: ")
+    phone = input("Enter Student's Phone number: ")
+    fname = input("Enter Student's Father Name: ")
+    mname = input("Enter Student's Mother Name: ")
+    roll_no = int(input("Enter Student's Roll No.: "))
+    query = 'INSERT INTO student_datas (name, address, phone, fname, mname, roll_no) VALUES (%s, %s, %s, %s, %s, %s)'
+    data = (name, address, phone, fname, mname, roll_no)
+    try:
+        cursor.execute(query, data)
+        connect.commit()
+        print("Data entered successfully.")
+    except mysql.connector.IntegrityError:
+        print("Roll number already exists.")
 
-# student adding function end here
-
-# student viewing function
 def view_student():
-    roll_no=int(input("Enter Roll Number of Student to search "))
-    q2='select * from student_datas where roll_no = %s'
-    data=(roll_no,)
-    cursor.execute(q2,data)
-    result=cursor.fetchone()
+    roll_no = int(input("Enter Roll Number of Student: "))
+    query = 'SELECT * FROM student_datas WHERE roll_no = %s'
+    cursor.execute(query, (roll_no,))
+    result = cursor.fetchone()
     if result:
-        # Print or process the data here
-        print("Student found:", result)
+        print("Student found:")
+        print("Name:", result[0])
+        print("Address:", result[1])
+        print("Phone:", result[2])
+        print("Father:", result[3])
+        print("Mother:", result[4])
+        print("Roll No:", result[5])
     else:
         print("Student not found.")
-    connect.commit()
-
-# sutdent viewing function end here
-# student data deleting funtion
 
 def delete_data():
-    print("'NOTE :- data once deleted cannot be undo carefully go forward otherwise fill wrong roll_no '")
-    roll_no=int(input("Enter roll number or enter 0"))
-    qury='delete from student_datas where roll_no=%s'
-    data=(roll_no)
-    cursor.execute(qury,data)
+    roll_no = int(input("Enter roll number to delete (0 to cancel): "))
+    if roll_no == 0:
+        print("Cancelled.")
+        return
+    query = 'DELETE FROM student_datas WHERE roll_no = %s'
+    cursor.execute(query, (roll_no,))
     connect.commit()
-    print("DATA DELETED THANK YOU ")
-
-# student data deleting function end here
-
-# student data updating function
+    if cursor.rowcount > 0:
+        print("Deleted successfully.")
+    else:
+        print("Record not found.")
 
 def update_data():
-    roll_no=int(input("Enter roll number of Student "))
-    name=input("Enter name to update ")
-    address=input("Enter address to update ")
-    fname=input("Enter father name to update ")
-    mname=input("Enter mother name to update ")
-    print("NOTE :- 'Roll Number Cannot be updated '")
-    query='update student_datas set name=%s,address=%s,fname=%s,mname=%s where roll_no=%s'
-    data=(name,address,fname,mname,roll_no)
-    print("DATA UPDATED THANK YOU ")
-    updated_data="New value added "
-    cursor.execute(query,(updated_data))
+    roll_no = int(input("Enter roll number of Student: "))
+    cursor.execute('SELECT * FROM student_datas WHERE roll_no = %s', (roll_no,))
+    if not cursor.fetchone():
+        print("Student not found.")
+        return
+
+    name = input("Enter new name: ")
+    address = input("Enter new address: ")
+    phone = input("Enter new phone: ")
+    fname = input("Enter new father name: ")
+    mname = input("Enter new mother name: ")
+    fields = []
+    values = []
+
+    if name:
+        fields.append("name=%s")
+        values.append(name)
+    if address:
+        fields.append("address=%s")
+        values.append(address)
+    if phone:
+        fields.append("phone=%s")
+        values.append(phone)
+    if fname:
+        fields.append("fname=%s")
+        values.append(fname)
+    if mname:
+        fields.append("mname=%s")
+        values.append(mname)
+
+    if not fields:
+        print("Nothing to update.")
+        return
+
+    query = f"UPDATE student_datas SET {', '.join(fields)} WHERE roll_no=%s"
+    values.append(roll_no)
+    cursor.execute(query, tuple(values))
     connect.commit()
+    print("Updated successfully.")
 
-
-    # Function to save data to CSV
 def save_to_csv():
-    q2 = 'SELECT * FROM student_datas'
-    cursor.execute(q2)
-    results = cursor.fetchall()
-
-    if results:
-        headers = ["Name", "Address", "Phone", "Father Name", "Mother Name", "Roll No"]
-        rows = [headers]
-
-        for row in results:
-            rows.append(row)
-
-        with open('student_data.csv', mode='w', newline='') as file:
-            writer = csv.writer(file)
-            writer.writerows(rows)
-        print("Data exported to student_data.csv successfully.")
-
-# update function end here  
-# main function creating
-def main():
-    #creating student management main interface
-    print("""
-========================================
-| Welcome to student management system |
-========================================
-| 1 . Add Student                      |
-========================================
-| 2 . View Student Data                |
-========================================
-| 3 . Update Student Data              |
-========================================
-| 4 . Delete Student Data              |
-========================================
-| 5 . Import to CSV                    |
-=======================================
-| 6 . Exit                             |
-========================================
-|    CHOOSE YOUR OPTION FROM ABOVE     |
-========================================
-          """)
-    choice=int(input("Enter Your Option "))
-    if choice==1:
-        add_sutdent()
-    elif choice==2:
-        view_student()
-    elif choice==3:
-        update_data()
-    elif choice==4:
-        delete_data()
-    elif choice==6:
-        exit()
-    elif choice==5:
-        save_to_csv()
+    cursor.execute('SELECT * FROM student_datas')
+    data = cursor.fetchall()
+    if data:
+        with open('student_data.csv', 'w', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow(["Name", "Address", "Phone", "Father", "Mother", "Roll No"])
+            writer.writerows(data)
+        print("Exported to student_data.csv")
     else:
-        print("Wrong Choice Plz Try Again ")
-# main function end here
-# connecting mysql succeed
+        print("No data available.")
+
+def main_menu():
+    while True:
+        print("""
+========================================
+|      Student Management System       |
+========================================
+| 1. Add Student                      |
+| 2. View Student Data                |
+| 3. Update Student Data              |
+| 4. Delete Student Data              |
+| 5. Export to CSV                    |
+| 6. Exit                             |
+========================================
+        """)
+        ch = input("Enter your option: ")
+        if ch == '1':
+            add_student()
+        elif ch == '2':
+            view_student()
+        elif ch == '3':
+            update_data()
+        elif ch == '4':
+            delete_data()
+        elif ch == '5':
+            save_to_csv()
+        elif ch == '6':
+            break
+        else:
+            print("Invalid choice.")
+
 while True:
-    loggin=input("Enter password to unlock software for use :- ")
-    if loggin=='123456':
-        main()
+    p = input("Enter password: ")
+    if p == '123456':
+        print("Login successful.")
+        main_menu()
+        break
     else:
-        continue
+        print("Wrong password.")
