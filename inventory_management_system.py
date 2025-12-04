@@ -1,111 +1,105 @@
 import mysql.connector
 import time
+import sys
 
 DB_HOST = "localhost"
 DB_USER = "root"
 DB_PASS = "123456"
 DB_NAME = "inventory_management_system"
 
-def connect_to_database():
+def get_conn(db=None):
+    cfg = {"host": DB_HOST, "user": DB_USER, "password": DB_PASS}
+    if db:
+        cfg["database"] = db
+    return mysql.connector.connect(**cfg)
+
+def ensure_db_and_table():
     try:
-        connection = mysql.connector.connect(
-            host=DB_HOST,
-            user=DB_USER,
-            password=DB_PASS,
-            database=DB_NAME
-        )
-        return connection
-    except mysql.connector.Error as err:
-        print(f"Error: {err}")
-        return None
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute(f"CREATE DATABASE IF NOT EXISTS `{DB_NAME}`")
+        cur.execute(f"USE `{DB_NAME}`")
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS inventory (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                product_name VARCHAR(255) NOT NULL,
+                quantity INT NOT NULL
+            )
+        """)
+        conn.commit()
+        cur.close()
+        conn.close()
+    except mysql.connector.Error as e:
+        print("DB error:", e)
+        sys.exit(1)
 
-def create_inventory_table_if_missing(cursor):
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS inventory (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            product_name VARCHAR(255) NOT NULL,
-            quantity INT NOT NULL
-        )
-    """)
+def add_item(name, qty):
+    conn = get_conn(DB_NAME)
+    cur = conn.cursor()
+    cur.execute("INSERT INTO inventory (product_name, quantity) VALUES (%s, %s)", (name, qty))
+    conn.commit()
+    cur.close()
+    conn.close()
 
-def add_item(cursor, product_name, quantity):
-    cursor.execute(
-        "INSERT INTO inventory (product_name, quantity) VALUES (%s, %s)",
-        (product_name, quantity)
-    )
+def update_quantity(name, qty):
+    conn = get_conn(DB_NAME)
+    cur = conn.cursor()
+    cur.execute("UPDATE inventory SET quantity = %s WHERE product_name = %s", (qty, name))
+    conn.commit()
+    cur.close()
+    conn.close()
 
-def update_quantity(cursor, product_name, new_quantity):
-    cursor.execute(
-        "UPDATE inventory SET quantity = %s WHERE product_name = %s",
-        (new_quantity, product_name)
-    )
-
-def get_inventory_list(cursor):
-    cursor.execute("SELECT * FROM inventory")
-    return cursor.fetchall()
+def view_inventory():
+    conn = get_conn(DB_NAME)
+    cur = conn.cursor()
+    cur.execute("SELECT id, product_name, quantity FROM inventory")
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    if not rows:
+        print("Inventory empty.")
+    else:
+        print("{:<4} {:<30} {:<8}".format("ID", "Product", "Qty"))
+        for r in rows:
+            print("{:<4} {:<30} {:<8}".format(r[0], r[1], r[2]))
 
 def main():
-    conn = connect_to_database()
-    if not conn:
-        print("Could not connect to DB.")
-        return
-
-    cursor = conn.cursor()
-    create_inventory_table_if_missing(cursor)
-    conn.commit()
-
+    ensure_db_and_table()
     while True:
-        print("\n1. Add item to inventory")
-        print("2. Update quantity")
-        print("3. View inventory")
-        print("4. Exit")
-        choice = input("Enter your choice: ").strip()
-
+        print("\n1. Add item\n2. Update quantity\n3. View inventory\n4. Exit")
+        choice = input("Enter choice: ").strip()
         if choice == "1":
-            product_name = input("Enter product name: ").strip()
+            name = input("Product name: ").strip()
             try:
-                quantity = int(input("Enter quantity: ").strip())
+                qty = int(input("Quantity: ").strip())
             except ValueError:
-                print("Enter a valid number.")
+                print("Enter integer quantity.")
                 continue
-            add_item(cursor, product_name, quantity)
-            conn.commit()
-            print("Item added.")
-
+            add_item(name, qty)
+            print("Added.")
         elif choice == "2":
-            product_name = input("Enter product name: ").strip()
+            name = input("Product name: ").strip()
             try:
-                new_quantity = int(input("Enter new quantity: ").strip())
+                qty = int(input("New quantity: ").strip())
             except ValueError:
-                print("Enter a valid number.")
+                print("Enter integer quantity.")
                 continue
-            update_quantity(cursor, product_name, new_quantity)
-            conn.commit()
-            print("Quantity updated.")
-
+            update_quantity(name, qty)
+            print("Updated.")
         elif choice == "3":
-            inventory_list = get_inventory_list(cursor)
-            print("\nInventory List:")
-            for item in inventory_list:
-                print(f"ID: {item[0]}, Product: {item[1]}, Quantity: {item[2]}")
-
+            view_inventory()
         elif choice == "4":
             break
-
         else:
             print("Invalid choice.")
 
-    cursor.close()
-    conn.close()
-
 if __name__ == "__main__":
     while True:
-        login = input("Enter password to unlock: ")
-        if login == DB_PASS:
-            line = "Logging in, please wait..."
-            for word in line.split():
-                print(word, end=' ', flush=True)
-                time.sleep(0.5)
+        pwd = input("Enter password to unlock: ")
+        if pwd == DB_PASS:
+            for w in "Logging in, please wait...".split():
+                print(w, end=" ", flush=True)
+                time.sleep(0.3)
             print()
             main()
             break
