@@ -8,129 +8,110 @@ connection = mysql.connector.connect(
 )
 cursor = connection.cursor()
 
-database_name = "gym_management"
-cursor.execute(f"CREATE DATABASE IF NOT EXISTS {database_name}")
-connection.database = database_name
+db = "gym_management"
+cursor.execute(f"CREATE DATABASE IF NOT EXISTS {db}")
+connection.database = db
 
 cursor.execute("""
-    CREATE TABLE IF NOT EXISTS members (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        name VARCHAR(255),
-        email VARCHAR(255),
-        phone VARCHAR(15),
-        membership_start DATE,
-        membership_end DATE
-    )
+CREATE TABLE IF NOT EXISTS members (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(255),
+    email VARCHAR(255),
+    phone VARCHAR(15),
+    membership_start DATE,
+    membership_end DATE
+)
 """)
 
 cursor.execute("""
-    CREATE TABLE IF NOT EXISTS workouts (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        member_id INT,
-        workout_date DATE,
-        duration_minutes INT,
-        FOREIGN KEY (member_id) REFERENCES members(id)
-    )
+CREATE TABLE IF NOT EXISTS workouts (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    member_id INT,
+    workout_date DATE,
+    duration_minutes INT,
+    FOREIGN KEY (member_id) REFERENCES members(id) ON DELETE CASCADE
+)
 """)
 
-def add_member(name, email, phone, membership_duration_days):
-    membership_start = datetime.now().date()
-    membership_end = membership_start + timedelta(days=membership_duration_days)
-    sql = """
-        INSERT INTO members (name, email, phone, membership_start, membership_end)
-        VALUES (%s, %s, %s, %s, %s)
-    """
-    values = (name, email, phone, membership_start, membership_end)
-    cursor.execute(sql, values)
+def add_member(name, email, phone, days):
+    start = datetime.now().date()
+    end = start + timedelta(days=days)
+    cursor.execute(
+        "INSERT INTO members (name,email,phone,membership_start,membership_end) VALUES (%s,%s,%s,%s,%s)",
+        (name, email, phone, start, end)
+    )
     connection.commit()
-    print("Member added successfully")
+    print("Member added")
 
-def remove_member(member_id):
-    cursor.execute("SELECT * FROM members WHERE id = %s", (member_id,))
-    member = cursor.fetchone()
-    if not member:
+def remove_member(mid):
+    cursor.execute("SELECT id FROM members WHERE id=%s", (mid,))
+    if not cursor.fetchone():
         print("Member not found")
         return
-
-    cursor.execute("DELETE FROM workouts WHERE member_id = %s", (member_id,))
-    cursor.execute("DELETE FROM members WHERE id = %s", (member_id,))
+    cursor.execute("DELETE FROM members WHERE id=%s", (mid,))
     connection.commit()
-    print("Member removed successfully")
+    print("Member removed")
 
-def log_workout(member_id, workout_date, duration_minutes):
-    sql = "INSERT INTO workouts (member_id, workout_date, duration_minutes) VALUES (%s, %s, %s)"
-    values = (member_id, workout_date, duration_minutes)
-    cursor.execute(sql, values)
+def log_workout(mid, date, mins):
+    cursor.execute("SELECT id FROM members WHERE id=%s", (mid,))
+    if not cursor.fetchone():
+        print("Member does not exist")
+        return
+    cursor.execute(
+        "INSERT INTO workouts (member_id,workout_date,duration_minutes) VALUES (%s,%s,%s)",
+        (mid, date, mins)
+    )
     connection.commit()
-    print("Workout logged successfully")
+    print("Workout saved")
 
-def view_workout_history(member_id):
-    sql = "SELECT * FROM workouts WHERE member_id = %s ORDER BY workout_date DESC"
-    cursor.execute(sql, (member_id,))
-    workouts = cursor.fetchall()
-    if not workouts:
-        print("No workout history found")
-    else:
-        print(f"Workout history for Member ID {member_id}:")
-        for workout in workouts:
-            print(f"Workout ID: {workout[0]}, Date: {workout[2]}, Duration: {workout[3]} minutes")
+def view_workouts(mid):
+    cursor.execute("SELECT * FROM workouts WHERE member_id=%s ORDER BY workout_date DESC", (mid,))
+    data = cursor.fetchall()
+    if not data:
+        print("No records")
+        return
+    for w in data:
+        print(f"{w[0]}  {w[2]}  {w[3]} min")
 
-def list_all_members():
-    sql = "SELECT * FROM members"
-    cursor.execute(sql)
-    members = cursor.fetchall()
-    if not members:
-        print("No members found")
+def list_members():
+    cursor.execute("SELECT * FROM members")
+    data = cursor.fetchall()
+    for m in data:
+        print(f"{m[0]}  {m[1]}  {m[3]}  {m[5]}")
+
+def check_status(mid):
+    cursor.execute("SELECT membership_end FROM members WHERE id=%s", (mid,))
+    res = cursor.fetchone()
+    if not res:
+        print("Member not found")
+        return
+    if datetime.now().date() > res[0]:
+        print("Membership expired")
     else:
-        print("List of all members:")
-        for member in members:
-            print(
-                f"Member ID: {member[0]}, Name: {member[1]}, Email: {member[2]}, "
-                f"Phone: {member[3]}, Start: {member[4]}, End: {member[5]}"
-            )
+        print("Active till", res[0])
 
 while True:
-    print("\n1. Add Member")
-    print("2. Remove Member")
-    print("3. Log Workout")
-    print("4. View Workout History")
-    print("5. List All Members")
-    print("6. Exit")
+    print("\n1 Add\n2 Remove\n3 Workout\n4 History\n5 Members\n6 Status\n7 Exit")
+    ch = input("Choice: ")
 
-    choice = input("Enter your choice (1-6): ")
-
-    if choice == "1":
-        name = input("Enter member name: ")
-        email = input("Enter member email: ")
-        phone = input("Enter member phone: ")
-        duration = int(input("Enter membership duration (in days): "))
-        add_member(name, email, phone, duration)
-
-    elif choice == "2":
-        member_id = int(input("Enter Member ID to remove: "))
-        remove_member(member_id)
-
-    elif choice == "3":
-        member_id = int(input("Enter Member ID: "))
-        date_str = input("Enter workout date (YYYY-MM-DD) or leave blank for today: ").strip()
-        if date_str == "":
-            workout_date = datetime.now().date()
-        else:
-            workout_date = datetime.strptime(date_str, "%Y-%m-%d").date()
-
-        duration_minutes = int(input("Enter workout duration (in minutes): "))
-        log_workout(member_id, workout_date, duration_minutes)
-
-    elif choice == "4":
-        member_id = int(input("Enter Member ID: "))
-        view_workout_history(member_id)
-
-    elif choice == "5":
-        list_all_members()
-
-    elif choice == "6":
-        print("Exiting...")
+    if ch == "1":
+        add_member(input("Name: "), input("Email: "), input("Phone: "), int(input("Days: ")))
+    elif ch == "2":
+        remove_member(int(input("ID: ")))
+    elif ch == "3":
+        mid = int(input("ID: "))
+        d = input("Date (YYYY-MM-DD) or blank: ")
+        d = datetime.now().date() if d == "" else datetime.strptime(d, "%Y-%m-%d").date()
+        log_workout(mid, d, int(input("Minutes: ")))
+    elif ch == "4":
+        view_workouts(int(input("ID: ")))
+    elif ch == "5":
+        list_members()
+    elif ch == "6":
+        check_status(int(input("ID: ")))
+    elif ch == "7":
+        cursor.close()
+        connection.close()
         break
-
     else:
-        print("Invalid choice")
+        print("Wrong choice")
